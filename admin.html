@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Discipleship Exam Results & Exporter</title>
+<!-- Firebase App and Firestore SDKs (Compat CDN) -->
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+<style>
+  :root {
+    --bg: #0f172a;
+    --card-bg: #1e293b;
+    --card-border: #334155;
+    --text-primary: #f8fafc;
+    --text-muted: #94a3b8;
+    --accent: #3b82f6;
+    --accent-hover: #2563eb;
+    --success: #10b981;
+    --danger: #ef4444;
+    --warning: #f59e0b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background-color: var(--bg);
+    color: var(--text-primary);
+    min-height: 100vh;
+    padding: 20px;
+  }
+  .container { max-width: 1280px; margin: 0 auto; }
+  
+  .card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+  }
+
+  /* Header */
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+  h1 { margin: 0; font-size: 1.6rem; font-weight: 700; color: #fff; }
+  p.subtitle { margin: 4px 0 0; color: var(--text-muted); font-size: 0.95rem; }
+
+  /* Buttons */
+  button {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 18px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+  button:hover { background: var(--accent-hover); }
+  button.success { background: var(--success); font-size: 1rem; padding: 12px 22px; }
+  button.success:hover { background: #059669; }
+  button.secondary { background: #475569; }
+  button.secondary:hover { background: #334155; }
+  button:disabled { opacity: 0.6; cursor: not-allowed; }
+
+  /* Inputs */
+  input, select {
+    background: #0f172a;
+    border: 1px solid var(--card-border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    color: #fff;
+    font-size: 0.95rem;
+  }
+  input:focus, select:focus { outline: none; border-color: var(--accent); }
+
+  /* Setup Bar (Only shows if Firebase keys are empty) */
+  .setup-bar {
+    background: #1e293b;
+    border: 1px dashed var(--accent);
+    border-radius: 10px;
+    padding: 16px;
+    margin-bottom: 20px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: flex-end;
+  }
+  .setup-field { flex: 1; min-width: 220px; }
+  .setup-field label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 4px; color: var(--text-muted); }
+
+  /* Stats Grid */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 14px;
+    margin-bottom: 20px;
+  }
+  .stat-card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 10px;
+    padding: 16px;
+  }
+  .stat-label { color: var(--text-muted); font-size: 0.8rem; text-transform: uppercase; font-weight: 600; }
+  .stat-value { font-size: 1.75rem; font-weight: 700; margin-top: 4px; color: #fff; }
+
+  /* Controls Bar */
+  .controls-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .search-box { flex: 1; min-width: 260px; }
+  .filter-group { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+  /* Table */
+  .table-responsive {
+    overflow-x: auto;
+    border-radius: 8px 8px 0 0;
+    border: 1px solid var(--card-border);
+    border-bottom: none;
+  }
+  .pagination-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 18px;
+    background: #111827;
+    border: 1px solid var(--card-border);
+    border-radius: 0 0 8px 8px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .page-btn {
+    padding: 6px 14px;
+    font-size: 0.85rem;
+    font-weight: 600;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+    font-size: 0.95rem;
+  }
+  th {
+    background: #111827;
+    color: var(--text-muted);
+    padding: 12px 16px;
+    font-weight: 600;
+    border-bottom: 1px solid var(--card-border);
+  }
+  td {
+    padding: 12px 16px;
+    border-bottom: 1px solid #293548;
+    color: #e2e8f0;
+  }
+  tr:hover td { background: #263349; }
+  .badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 9999px;
+    font-size: 0.8rem;
+    font-weight: 600;
+  }
+  .badge.pass { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+  .badge.fail { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+  .badge.auto { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
+
+  /* Modals */
+  .modal-backdrop {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.75);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    z-index: 100;
+  }
+  .modal {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 12px;
+    width: 100%;
+    max-width: 650px;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    padding: 24px;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+  }
+  .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+  .modal-body { overflow-y: auto; flex: 1; padding-right: 6px; }
+  .close-btn { background: none; border: none; color: var(--text-muted); font-size: 1.5rem; cursor: pointer; padding: 0; }
+  .close-btn:hover { color: #fff; }
+
+  .hidden { display: none !important; }
+  pre {
+    background: #0f172a;
+    padding: 12px;
+    border-radius: 8px;
+    overflow-x: auto;
+    font-family: monospace;
+    font-size: 0.85rem;
+    color: #cbd5e1;
+    white-space: pre-wrap;
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+  <!-- TOP HEADER -->
+  <div class="header">
+    <div style="display: flex; align-items: center; gap: 14px;">
+      <img src="https://davidicgenerationchurch.com/wp-content/uploads/2023/05/DGC-all-white-logo@3x-300x149.png" alt="DGC Logo" style="max-height: 48px; max-width: 160px; object-fit: contain;" onerror="this.src='logo_white.png'">
+      <div>
+        <h1>Discipleship Exam - Results & Exporter</h1>
+        <p class="subtitle" id="statusText">Ready</p>
+      </div>
+    </div>
+    <div style="display: flex; gap: 10px; align-items: center;">
+      <button id="refreshBtn" class="secondary">🔄 Refresh</button>
+      <button id="exportCsvBtn" class="success">📥 Download Excel / CSV</button>
+    </div>
+  </div>
+
+
+
+  <!-- STATS TILES -->
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-label">Total Submissions</div>
+      <div class="stat-value" id="statTotal">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Pass Rate</div>
+      <div class="stat-value" id="statPassRate">0%</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Average Score</div>
+      <div class="stat-value" id="statAvg">0 / 30</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Highest Score</div>
+      <div class="stat-value" id="statHigh">0 / 30</div>
+    </div>
+  </div>
+
+  <!-- SEARCH & FILTER BAR -->
+  <div class="controls-bar">
+    <input type="text" id="searchInput" class="search-box" placeholder="🔍 Search candidate by name or email...">
+    
+    <div class="filter-group">
+      <select id="filterResult">
+        <option value="ALL">All Results</option>
+        <option value="Pass">Pass Only</option>
+        <option value="Fail">Fail Only</option>
+      </select>
+
+      <select id="sortOrder">
+        <option value="score_desc">Score (Highest First)</option>
+        <option value="score_asc">Score (Lowest First)</option>
+        <option value="time_desc">Time (Newest First)</option>
+        <option value="time_asc">Time (Oldest First)</option>
+        <option value="name_asc">Name (A-Z)</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- RESULTS TABLE -->
+  <div class="card" style="padding: 0;">
+    <div class="table-responsive">
+      <table>
+        <thead>
+          <tr>
+            <th>Rank</th>
+            <th>Full Name</th>
+            <th>Email</th>
+            <th>Score</th>
+            <th>Percent</th>
+            <th>Status</th>
+            <th>Submitted At</th>
+            <th>Auto?</th>
+            <th>Answers</th>
+          </tr>
+        </thead>
+        <tbody id="resultsBody">
+          <tr><td colspan="9" style="text-align:center; padding: 24px; color: var(--text-muted);">Loading submissions...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- PAGINATION BAR (Batches of 50) -->
+    <div class="pagination-bar" id="paginationBar">
+      <div id="pageInfo" style="color: var(--text-muted); font-size: 0.9rem;">Showing 0 of 0 candidates</div>
+      <div style="display: flex; gap: 8px; align-items: center;">
+        <button id="firstPageBtn" class="secondary page-btn" title="First Page">⏮ First</button>
+        <button id="prevPageBtn" class="secondary page-btn" title="Previous Page">◀ Prev</button>
+        <span id="pageIndicator" style="font-weight: 600; padding: 0 10px; font-size: 0.9rem; color: #fff;">Page 1 of 1</span>
+        <button id="nextPageBtn" class="secondary page-btn" title="Next Page">Next ▶</button>
+        <button id="lastPageBtn" class="secondary page-btn" title="Last Page">Last ⏭</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- CANDIDATE DETAIL MODAL -->
+<div id="detailModal" class="modal-backdrop hidden">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="modalStudentName" style="margin: 0; font-size: 1.3rem;">Candidate Details</h2>
+      <button class="close-btn" id="modalCloseBtn">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div id="modalSummary" style="margin-bottom: 12px; color: var(--text-muted);"></div>
+      <h4 style="margin: 8px 0 4px;">Full Question Log:</h4>
+      <pre id="modalAnswers"></pre>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   OPTIONAL: You can paste your Firebase Project ID and API Key 
+   here so it connects instantly without even asking.
+   ============================================================ */
+const FIREBASE_CONFIG = {
+  projectId: "discipleship-unit-test",
+  apiKey: "AIzaSyAqwnQTnNKpsZ2enPgTAaHX0vxDCYqVwmU"
+};
+
+let db = null;
+let rawRecords = [];
+let filteredRecords = [];
+
+const $ = id => document.getElementById(id);
+
+window.addEventListener("DOMContentLoaded", () => {
+  const proj = FIREBASE_CONFIG.projectId || localStorage.getItem("adm_projectId") || "";
+  const key = FIREBASE_CONFIG.apiKey || localStorage.getItem("adm_apiKey") || "";
+
+  if (proj && key) {
+    initAndLoad(proj, key);
+  } else {
+    $("statusText").textContent = "Firebase Project ID or API Key missing.";
+  }
+});
+
+function initAndLoad(projectId, apiKey) {
+  if (!firebase.apps.length) {
+    firebase.initializeApp({ projectId, apiKey });
+  }
+  db = firebase.firestore();
+  fetchResults();
+}
+
+async function fetchResults() {
+  $("statusText").textContent = "Loading records from Firestore...";
+  $("resultsBody").innerHTML = `<tr><td colspan="9" style="text-align:center; padding: 24px;">Loading submissions...</td></tr>`;
+
+  try {
+    const snap = await db.collection("results").get();
+    rawRecords = [];
+    snap.forEach(doc => {
+      rawRecords.push({ id: doc.id, ...doc.data() });
+    });
+
+    $("statusText").textContent = `Loaded ${rawRecords.length} student submissions. Updated at ${new Date().toLocaleTimeString()}`;
+    applyFiltersAndRender();
+  } catch (err) {
+    $("statusText").textContent = "Failed to load: " + err.message;
+    $("resultsBody").innerHTML = `<tr><td colspan="9" style="text-align:center; color: var(--danger); padding: 24px;">Error: ${err.message}. Make sure your Firestore rules allow read: if true;</td></tr>`;
+  }
+}
+
+$("refreshBtn").addEventListener("click", fetchResults);
+
+function parseFirestoreDate(val) {
+  if (!val) return null;
+  if (typeof val.toDate === "function") return val.toDate();
+  if (val.seconds) return new Date(val.seconds * 1000);
+  const d = new Date(val);
+  return isNaN(d.getTime()) ? null : d;
+}
+function formatDateTime(val) {
+  const d = parseFirestoreDate(val);
+  return d ? d.toLocaleString() : (val ? String(val) : "N/A");
+}
+function formatTimeOnly(val) {
+  const d = parseFirestoreDate(val);
+  return d ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "N/A";
+}
+function getTimestampMs(val) {
+  const d = parseFirestoreDate(val);
+  return d ? d.getTime() : 0;
+}
+
+function applyFiltersAndRender() {
+  const query = $("searchInput").value.trim().toLowerCase();
+  const resultFilter = $("filterResult").value;
+  const sort = $("sortOrder").value;
+
+  filteredRecords = rawRecords.filter(r => {
+    const matchesSearch = !query || 
+      (r.name && r.name.toLowerCase().includes(query)) ||
+      (r.email && r.email.toLowerCase().includes(query));
+    const matchesResult = (resultFilter === "ALL") || (r.result === resultFilter);
+    return matchesSearch && matchesResult;
+  });
+
+  filteredRecords.sort((a, b) => {
+    if (sort === "score_desc") return (b.score || 0) - (a.score || 0);
+    if (sort === "score_asc") return (a.score || 0) - (b.score || 0);
+    if (sort === "time_desc") return getTimestampMs(b.submittedAt) - getTimestampMs(a.submittedAt);
+    if (sort === "time_asc") return getTimestampMs(a.submittedAt) - getTimestampMs(b.submittedAt);
+    if (sort === "name_asc") return (a.name || "").localeCompare(b.name || "");
+    return 0;
+  });
+
+  updateStats();
+  renderTable();
+}
+
+function updateStats() {
+  const total = rawRecords.length;
+  $("statTotal").textContent = total;
+
+  if (total === 0) {
+    $("statPassRate").textContent = "0%";
+    $("statAvg").textContent = "0 / 30";
+    $("statHigh").textContent = "0 / 30";
+    return;
+  }
+
+  let passCount = 0;
+  let totalScore = 0;
+  let maxScore = 0;
+  let examTotal = 30;
+
+  rawRecords.forEach(r => {
+    if (r.result === "Pass") passCount++;
+    const s = Number(r.score) || 0;
+    totalScore += s;
+    if (s > maxScore) maxScore = s;
+    if (r.total) examTotal = r.total;
+  });
+
+  const passRate = Math.round((passCount / total) * 100);
+  const avg = (totalScore / total).toFixed(1);
+
+  $("statPassRate").textContent = `${passRate}%`;
+  $("statAvg").textContent = `${avg} / ${examTotal}`;
+  $("statHigh").textContent = `${maxScore} / ${examTotal}`;
+}
+
+const PAGE_SIZE = 50;
+let currentPage = 1;
+
+function renderTable() {
+  const totalItems = filteredRecords.length;
+  const totalPages = Math.ceil(totalItems / PAGE_SIZE) || 1;
+  if (currentPage > totalPages) currentPage = totalPages;
+  if (currentPage < 1) currentPage = 1;
+
+  const startIdx = (currentPage - 1) * PAGE_SIZE;
+  const endIdx = Math.min(startIdx + PAGE_SIZE, totalItems);
+  const pageItems = filteredRecords.slice(startIdx, endIdx);
+
+  // Update pagination indicator
+  if (totalItems === 0) {
+    $("pageInfo").textContent = "Showing 0 of 0 candidates";
+    $("pageIndicator").textContent = "Page 1 of 1";
+  } else {
+    $("pageInfo").textContent = `Showing ${(startIdx + 1).toLocaleString()} – ${endIdx.toLocaleString()} of ${totalItems.toLocaleString()} candidates`;
+    $("pageIndicator").textContent = `Page ${currentPage} of ${totalPages}`;
+  }
+
+  $("firstPageBtn").disabled = currentPage <= 1;
+  $("prevPageBtn").disabled = currentPage <= 1;
+  $("nextPageBtn").disabled = currentPage >= totalPages;
+  $("lastPageBtn").disabled = currentPage >= totalPages;
+
+  const tbody = $("resultsBody");
+  if (pageItems.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; padding: 24px; color: var(--text-muted);">No matching records found.</td></tr>`;
+    return;
+  }
+
+  let html = "";
+  pageItems.forEach((r, idx) => {
+    const globalRank = startIdx + idx + 1;
+    const isPass = r.result === "Pass";
+    const statusBadge = `<span class="badge ${isPass ? 'pass' : 'fail'}">${r.result || 'N/A'}</span>`;
+    const autoBadge = r.auto === "Yes" ? `<span class="badge auto">Time Out</span>` : `<span>No</span>`;
+    const timeStr = formatTimeOnly(r.submittedAt);
+
+    html += `
+      <tr>
+        <td><strong>#${globalRank}</strong></td>
+        <td><strong>${escapeHtml(r.name || "Unknown")}</strong></td>
+        <td>${escapeHtml(r.email || "")}</td>
+        <td><strong>${r.score}</strong> / ${r.total}</td>
+        <td>${r.percent}%</td>
+        <td>${statusBadge}</td>
+        <td>${timeStr}</td>
+        <td>${autoBadge}</td>
+        <td>
+          <button class="secondary" style="padding: 4px 10px; font-size: 0.8rem;" onclick="viewDetails(${startIdx + idx})">View</button>
+        </td>
+      </tr>
+    `;
+  });
+  tbody.innerHTML = html;
+}
+
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[m]);
+}
+
+// Pagination navigation
+$("firstPageBtn").addEventListener("click", () => { currentPage = 1; renderTable(); });
+$("prevPageBtn").addEventListener("click", () => { if (currentPage > 1) { currentPage--; renderTable(); } });
+$("nextPageBtn").addEventListener("click", () => {
+  const totalPages = Math.ceil(filteredRecords.length / PAGE_SIZE) || 1;
+  if (currentPage < totalPages) { currentPage++; renderTable(); }
+});
+$("lastPageBtn").addEventListener("click", () => {
+  currentPage = Math.ceil(filteredRecords.length / PAGE_SIZE) || 1;
+  renderTable();
+});
+
+// Filters reset pagination to Page 1
+$("searchInput").addEventListener("input", () => { currentPage = 1; applyFiltersAndRender(); });
+$("filterResult").addEventListener("change", () => { currentPage = 1; applyFiltersAndRender(); });
+$("sortOrder").addEventListener("change", () => { currentPage = 1; applyFiltersAndRender(); });
+
+window.viewDetails = function(globalIdx) {
+  const r = filteredRecords[globalIdx];
+  if (!r) return;
+  $("modalStudentName").textContent = r.name || "Candidate Details";
+  $("modalSummary").textContent = `Email: ${r.email} | Score: ${r.score}/${r.total} (${r.percent}%) | Status: ${r.result} | Submitted: ${formatDateTime(r.submittedAt)}`;
+  
+  let formatted = "";
+  try {
+    const parsed = JSON.parse(r.details || "{}");
+    if (Array.isArray(parsed.items)) {
+      formatted = `Anti-Cheat: Tab switches detected: ${parsed.tabSwitches || 0}\n\n`;
+      parsed.items.forEach((it, i) => {
+        formatted += `${i + 1}. ${it.q}\n   Candidate answer: ${it.chosen || "(No answer)"} [${it.ok ? "CORRECT" : "WRONG"}]\n   Correct answer:   ${it.right}\n\n`;
+      });
+    }
+  } catch (e) {}
+
+  $("modalAnswers").textContent = formatted || r.details || "(No detailed answers logged)";
+  $("detailModal").classList.remove("hidden");
+};
+$("modalCloseBtn").addEventListener("click", () => $("detailModal").classList.add("hidden"));
+
+// ==========================================
+// 1-CLICK EXCEL / CSV DOWNLOAD
+// ==========================================
+$("exportCsvBtn").addEventListener("click", () => {
+  if (rawRecords.length === 0) {
+    alert("No records to export.");
+    return;
+  }
+
+  // UTF-8 BOM so Microsoft Excel renders everything cleanly
+  let csv = "\uFEFF";
+  
+  const headers = [
+    "Rank",
+    "Full Name",
+    "Email Address",
+    "Score",
+    "Total Questions",
+    "Percentage (%)",
+    "Result (Pass/Fail)",
+    "Time Expired Auto-Submit",
+    "Submitted At"
+  ];
+  csv += headers.map(h => `"${h}"`).join(",") + "\r\n";
+
+  // Sort by highest score first
+  const sorted = [...rawRecords].sort((a, b) => (b.score || 0) - (a.score || 0));
+
+  sorted.forEach((r, i) => {
+    const row = [
+      i + 1,
+      r.name || "",
+      r.email || "",
+      r.score ?? "",
+      r.total ?? "",
+      r.percent ?? "",
+      r.result || "",
+      r.auto || "No",
+      formatDateTime(r.submittedAt)
+    ];
+    csv += row.map(val => `"${String(val).replace(/"/g, '""')}"`).join(",") + "\r\n";
+  });
+
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+  a.href = url;
+  a.download = `discipleship_exam_results_${timestamp}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+});
+</script>
+</body>
+</html>

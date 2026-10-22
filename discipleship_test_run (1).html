@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Discipleship test run</title>
+<style>
+  :root { --bg:#f4f6fb; --card:#fff; --ink:#1d2433; --accent:#2f5bea; --muted:#6b7385; --ok:#1a8f4c; --bad:#c93c3c; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--ink); }
+  .wrap { max-width:720px; margin:0 auto; padding:20px 16px 60px; }
+  .card { background:var(--card); border-radius:12px; padding:22px; margin-bottom:16px; box-shadow:0 1px 4px rgba(0,0,0,.08); }
+  h1 { margin:0 0 6px; font-size:1.5rem; }
+  p.sub { margin:0 0 16px; color:var(--muted); }
+  label.f { display:block; font-weight:600; margin:12px 0 4px; }
+  input[type=text], input[type=email] { width:100%; padding:11px; border:1px solid #cfd5e3; border-radius:8px; font-size:1rem; }
+  button { background:var(--accent); color:#fff; border:0; border-radius:8px; padding:12px 22px; font-size:1rem; cursor:pointer; margin-top:16px; }
+  button.ghost { background:transparent; color:var(--accent); border:1px solid var(--accent); margin-right:8px; }
+  button:disabled { opacity:.6; cursor:not-allowed; }
+  .q { font-weight:600; margin-bottom:10px; }
+  .opt { display:flex; gap:10px; align-items:flex-start; padding:9px 10px; border:1px solid #e1e5ef; border-radius:8px; margin:6px 0; cursor:pointer; font-weight:400; }
+  .opt:hover { background:#f0f4ff; }
+  #timer { position:sticky; top:0; background:var(--accent); color:#fff; padding:8px 14px; border-radius:0 0 10px 10px; text-align:right; font-weight:600; z-index:5; }
+  .hidden { display:none; }
+  .msg { padding:10px 12px; border-radius:8px; margin-top:12px; }
+  .msg.bad { background:#fdeaea; color:var(--bad); }
+  .msg.info { background:#eaf0ff; color:#1f3fa8; }
+  .score { font-size:2rem; font-weight:700; }
+  .rev { border-left:5px solid #ccc; }
+  .rev.right { border-left-color:var(--ok); }
+  .rev.wrong { border-left-color:var(--bad); }
+  .tag { font-weight:700; }
+  .tag.right { color:var(--ok); } .tag.wrong { color:var(--bad); }
+  .line { margin:4px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- START -->
+  <div id="start" class="card">
+    <h1 id="examTitle"></h1>
+    <p class="sub" id="examIntro"></p>
+    <div class="msg info" id="revealInfo"></div>
+    <div id="registerBox">
+      <label class="f" for="fullName">Full name</label>
+      <input type="text" id="fullName" autocomplete="name" placeholder="e.g. Ada Okafor">
+      <label class="f" for="email">Email address</label>
+      <input type="email" id="email" autocomplete="email" placeholder="you@example.com">
+      <div id="startErr" class="msg bad hidden"></div>
+      <button id="startBtn">Start exam</button>
+    </div>
+    <div id="waitMsg" class="msg bad hidden"></div>
+    <div id="closedMsg" class="msg bad hidden">This exam is now closed.</div>
+    <div style="margin-top:14px">
+      <button class="ghost" id="lookupBtn" type="button">Already submitted? View my results</button>
+      <button class="ghost hidden" id="keyBtn" type="button">View answer key</button>
+    </div>
+  </div>
+
+  <!-- LOOKUP -->
+  <div id="lookup" class="card hidden">
+    <h1>View my results</h1>
+    <p class="sub">Use the same browser and email you used for the exam.</p>
+    <label class="f" for="lookupEmail">Email address</label>
+    <input type="email" id="lookupEmail" placeholder="you@example.com">
+    <div id="lookupErr" class="msg bad hidden"></div>
+    <button id="lookupGo" type="button">Show results</button>
+    <button class="ghost" id="lookupBack" type="button" style="margin-left:8px">Back</button>
+  </div>
+
+  <!-- EXAM -->
+  <div id="timer" class="hidden"></div>
+  <form id="exam" class="hidden"></form>
+  <div id="submitBox" class="card hidden"><button id="submitBtn" type="button">Submit exam</button></div>
+
+  <!-- RESULT / KEY -->
+  <div id="result" class="hidden">
+    <div class="card">
+      <h1 id="resultName"></h1>
+      <div class="score" id="scoreText"></div>
+      <div class="msg info" id="resultNote"></div>
+      <div class="msg info hidden" id="saveStatus"></div>
+      <button class="ghost" id="resultBack" type="button" style="margin-top:14px">Back to start</button>
+    </div>
+    <div id="review"></div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   1. SETTINGS
+   ============================================================ */
+const CONFIG = {
+  title: "Discipleship test run",
+  intro: "30 questions, 10 minutes. Your answers will be sent after the end of test time.",
+  timeLimitMinutes: 10,
+  passMark: 50,
+  questionsPerStudent: 0,
+
+  // Nigeria time is +01:00. Format: YYYY-MM-DDTHH:MM:SS+01:00
+  startAt:  "",   // exam opens ("" = open now)
+  endAt:    "2026-10-22T20:00:00+01:00",   // exam closes ("" = never closes)
+  revealAt: "",                             // answers shown from this time ("" = same as endAt)
+
+  // Firebase (Firestore) configuration
+  firebase: { projectId: "discipleship-unit-test", apiKey: "AIzaSyAqwnQTnNKpsZ2enPgTAaHX0vxDCYqVwmU", collection: "results" }
+};
+
+/* ============================================================
+   2. QUESTIONS  (answer = position of the correct option, from 0)
+   ============================================================ */
+const QUESTIONS = [
+  { q: "In Matthew 4:19, what did Jesus say He would make His first disciples?", options: ["Fishers of men", "Shepherds of the flock", "Teachers of the law", "Keepers of the temple"], answer: 0 },
+  { q: "How many apostles did Jesus choose from among His disciples?", options: ["7", "10", "12", "70"], answer: 2 },
+  { q: "Which disciple was a tax collector before following Jesus?", options: ["Peter", "Matthew", "Philip", "Thomas"], answer: 1 },
+  { q: "Which disciple betrayed Jesus?", options: ["Thomas", "Judas Iscariot", "Andrew", "James"], answer: 1 },
+  { q: "In which Gospel do we find the command \"Go therefore and make disciples of all nations\"?", options: ["Matthew", "Luke", "John", "Acts"], answer: 0 },
+  { q: "In which city were the disciples first called Christians?", options: ["Jerusalem", "Antioch", "Rome", "Ephesus"], answer: 1 },
+  { q: "According to John 13:35, how will everyone know that we are Jesus' disciples?", options: ["By our prayers", "By our love for one another", "By our fasting", "By our gifts"], answer: 1 },
+  { q: "Jesus said that anyone who wants to follow Him must deny himself and take up his what daily?", options: ["Sword", "Staff", "Cross", "Yoke"], answer: 2 },
+  { q: "Which disciple denied Jesus three times?", options: ["John", "Andrew", "James", "Peter"], answer: 3 },
+  { q: "Who replaced Judas Iscariot among the twelve apostles?", options: ["Matthias", "Barnabas", "Silas", "Timothy"], answer: 0 },
+  { q: "Which young protégé of Paul received two letters from him?", options: ["Titus", "Timothy", "Silas", "Luke"], answer: 1 },
+  { q: "In John 15, Jesus says \"I am the vine, you are the...\"", options: ["Roots", "Leaves", "Branches", "Fruit"], answer: 2 },
+  { q: "According to John 15, what must a branch do in order to bear fruit?", options: ["Work harder", "Remain in the vine", "Wait for harvest", "Compete with others"], answer: 1 },
+  { q: "Which of these is NOT a fruit of the Spirit listed in Galatians 5:22-23?", options: ["Joy", "Peace", "Self-control", "Ambition"], answer: 3 },
+  { q: "Jesus taught His disciples to begin the Lord's Prayer with which words?", options: ["Our Father in heaven", "Give us this day our daily bread", "Your kingdom come", "Forgive us our debts"], answer: 0 },
+  { q: "Which spiritual discipline did Jesus practise for 40 days in the wilderness?", options: ["Feasting", "Teaching", "Fasting", "Building"], answer: 2 },
+  { q: "In the parable of the sower, what does the seed represent?", options: ["Money", "Angels", "Prayers", "The word of God"], answer: 3 },
+  { q: "Which disciple doubted the resurrection until he saw Jesus' wounds?", options: ["Thomas", "Philip", "Nathanael", "Simon the Zealot"], answer: 0 },
+  { q: "In Luke 10, about how many disciples did Jesus send out ahead of Him in pairs?", options: ["12", "70", "120", "500"], answer: 1 },
+  { q: "Which event empowered the disciples in Acts 2?", options: ["The Transfiguration", "The Last Supper", "The Ascension", "The coming of the Holy Spirit"], answer: 3 },
+  { q: "Which book of the Bible records the growth of the early church after Jesus' resurrection?", options: ["Romans", "Acts", "Hebrews", "Revelation"], answer: 1 },
+  { q: "According to James 2:26, faith without what is dead?", options: ["Hope", "Love", "Works", "Prayer"], answer: 2 },
+  { q: "Who followed Elijah as his servant and became his successor?", options: ["Elisha", "Samuel", "Joshua", "Gehazi"], answer: 0 },
+  { q: "Who took over leadership of Israel after Moses?", options: ["Caleb", "Aaron", "Joshua", "Eleazar"], answer: 2 },
+  { q: "At the Last Supper, what did Jesus do to show servant leadership?", options: ["Gave them silver coins", "Healed lepers", "Washed their feet", "Fed five thousand"], answer: 2 },
+  { q: "According to Jesus, what is the greatest commandment?", options: ["Keep the Sabbath", "Love God with all your heart, soul and mind", "Offer sacrifices", "Honour your parents"], answer: 1 },
+  { q: "Philip explained the writings of which prophet to the Ethiopian official in Acts 8?", options: ["Isaiah", "Jeremiah", "Daniel", "Ezekiel"], answer: 0 },
+  { q: "Which disciple is traditionally identified as \"the disciple whom Jesus loved\"?", options: ["Andrew", "James", "John", "Thomas"], answer: 2 },
+  { q: "In 2 Timothy 2:2, to whom should Timothy entrust what he had learned?", options: ["Anyone who asks", "Faithful people who can teach others", "Only the elders", "Only his family"], answer: 1 },
+  { q: "What made the Bereans noble-minded in Acts 17:11?", options: ["They gave large offerings", "They fasted weekly", "They examined the Scriptures daily", "They built a synagogue"], answer: 2 }
+];
+
+/* ============================================================
+   3. EXAM LOGIC - no need to edit below
+   ============================================================ */
+const $ = id => document.getElementById(id);
+let paper = [], student = {}, timerId = null, endTime = 0, submitted = false;
+const T = s => s ? new Date(s).getTime() : null;
+const START = T(CONFIG.startAt), END = T(CONFIG.endAt), REVEAL = T(CONFIG.revealAt) || END;
+const notOpen   = () => START !== null && Date.now() < START;
+const isClosed  = () => END !== null && Date.now() >= END;
+const isRevealed = () => REVEAL === null || Date.now() >= REVEAL;
+const fmt = ms => new Date(ms).toLocaleString("en-NG", { dateStyle: "full", timeStyle: "short" });
+const KEY = e => "exam_attempt_" + e;
+
+function show(ids) {
+  ["start","lookup","exam","submitBox","timer","result"].forEach(x => $(x).classList.add("hidden"));
+  ids.split(",").forEach(x => $(x).classList.remove("hidden"));
+  $("saveStatus").classList.add("hidden");
+  window.scrollTo(0, 0);
+}
+function showErr(el, text) { el.textContent = text; el.classList.remove("hidden"); }
+
+function refreshStart() {
+  $("examTitle").textContent = CONFIG.title;
+  $("examIntro").textContent = CONFIG.intro;
+  document.title = CONFIG.title;
+  if (REVEAL !== null && !isRevealed()) {
+    $("revealInfo").textContent = "Correct answers will be revealed on " + fmt(REVEAL) + ". You will see your score straight after you submit.";
+  } else if (REVEAL !== null) {
+    $("revealInfo").textContent = "Answers have been revealed.";
+  } else {
+    $("revealInfo").textContent = "You will see your score and the correct answers straight after you submit.";
+  }
+  const wait = notOpen(), closed = isClosed();
+  $("registerBox").classList.toggle("hidden", wait || closed);
+  $("waitMsg").classList.toggle("hidden", !wait);
+  if (wait) $("waitMsg").textContent = "The exam has not opened yet. It opens on " + fmt(START) + ".";
+  $("closedMsg").classList.toggle("hidden", !closed);
+  $("keyBtn").classList.toggle("hidden", !(REVEAL !== null && isRevealed()));
+}
+function home() { show("start"); refreshStart(); }
+home();
+setInterval(() => { if (!$("start").classList.contains("hidden")) refreshStart(); }, 15000);
+
+function shuffle(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  return a;
+}
+function buildPaper() {
+  let qs = shuffle(QUESTIONS);
+  if (CONFIG.questionsPerStudent > 0) qs = qs.slice(0, CONFIG.questionsPerStudent);
+  return qs.map(item => ({ q: item.q, opts: shuffle(item.options.map((text, i) => ({ text, correct: i === item.answer }))) }));
+}
+function render() {
+  const form = $("exam"); form.innerHTML = "";
+  paper.forEach((item, qi) => {
+    const card = document.createElement("div"); card.className = "card";
+    const title = document.createElement("div"); title.className = "q"; title.textContent = (qi + 1) + ". " + item.q;
+    card.appendChild(title);
+    item.opts.forEach((o, oi) => {
+      const lab = document.createElement("label"); lab.className = "opt";
+      const r = document.createElement("input"); r.type = "radio"; r.name = "q" + qi; r.value = oi;
+      const span = document.createElement("span"); span.textContent = o.text;
+      lab.appendChild(r); lab.appendChild(span); card.appendChild(lab);
+    });
+    form.appendChild(card);
+  });
+}
+
+$("startBtn").addEventListener("click", () => {
+  if (notOpen() || isClosed()) return refreshStart();
+  const name = $("fullName").value.trim();
+  const email = $("email").value.trim().toLowerCase();
+  const err = $("startErr"); err.classList.add("hidden");
+  if (name.split(/\s+/).length < 2) return showErr(err, "Please enter your full name (first and last name).");
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return showErr(err, "Please enter a valid email address.");
+  try { if (localStorage.getItem(KEY(email))) return showErr(err, "This email has already submitted the exam."); } catch (e) {}
+  student = { name, email };
+  paper = buildPaper(); render();
+  show("exam,submitBox,timer");
+  endTime = Date.now() + CONFIG.timeLimitMinutes * 60000;
+  if (END !== null) endTime = Math.min(endTime, END);
+  saveProgress();
+  tick(); timerId = setInterval(tick, 1000);
+});
+function tick() {
+  const left = Math.max(0, endTime - Date.now());
+  const m = Math.floor(left / 60000), s = Math.floor((left % 60000) / 1000);
+  $("timer").textContent = "Time left: " + m + ":" + String(s).padStart(2, "0");
+  if (left <= 0) { clearInterval(timerId); finish(true); }
+}
+$("submitBtn").addEventListener("click", () => {
+  const un = paper.filter((_, i) => !document.querySelector('input[name="q' + i + '"]:checked')).length;
+  if (un > 0 && !confirm(un + " question(s) unanswered. Submit anyway?")) return;
+  finish(false);
+});
+
+function finish(auto) {
+  if (submitted) return;
+  submitted = true; clearInterval(timerId);
+  let score = 0;
+  const items = paper.map((item, i) => {
+    const picked = document.querySelector('input[name="q' + i + '"]:checked');
+    const chosen = picked ? item.opts[+picked.value] : null;
+    const right = item.opts.find(o => o.correct);
+    const ok = !!(chosen && chosen.correct);
+    if (ok) score++;
+    return { q: item.q, chosen: chosen ? chosen.text : null, right: right.text, ok };
+  });
+  const attempt = { name: student.name, email: student.email, score, total: paper.length, items, auto, at: Date.now() };
+  try { localStorage.setItem(KEY(student.email), JSON.stringify(attempt)); localStorage.removeItem(PROGRESS_KEY); } catch (e) {}
+  showAttempt(attempt);
+  saveResult(attempt);
+}
+
+/* ---- keep progress safe if the browser crashes or the page is refreshed ---- */
+const PROGRESS_KEY = "exam_progress";
+const EXAM_ID = CONFIG.title + "|" + QUESTIONS.length;
+function saveProgress() {
+  try {
+    const answers = {};
+    paper.forEach((_, i) => {
+      const p = document.querySelector('input[name="q' + i + '"]:checked');
+      if (p) answers[i] = +p.value;
+    });
+    localStorage.setItem(PROGRESS_KEY, JSON.stringify({ v: EXAM_ID, student, paper, answers, endTime }));
+  } catch (e) {}
+}
+$("exam").addEventListener("change", saveProgress);
+
+/* ---- Firebase (Firestore) saving ---- */
+const FB = CONFIG.firebase || {};
+const fbOn = () => !!(FB.projectId && FB.apiKey);
+function docId(email) { return "e_" + email.toLowerCase().replace(/[^a-z0-9._@+-]/g, "_"); }
+function setSave(text, bad) {
+  const el = $("saveStatus");
+  el.textContent = text;
+  el.className = "msg " + (bad ? "bad" : "info");
+}
+function toFields(p) {
+  return { fields: {
+    exam: { stringValue: p.exam }, name: { stringValue: p.name }, email: { stringValue: p.email },
+    score: { integerValue: String(p.score) }, total: { integerValue: String(p.total) }, percent: { integerValue: String(p.percent) },
+    result: { stringValue: p.result }, auto: { stringValue: p.auto }, submittedAt: { timestampValue: p.submittedAt },
+    details: { stringValue: p.details }
+  } };
+}
+async function postResult(p, key, n, visible) {
+  const url = "https://firestore.googleapis.com/v1/projects/" + encodeURIComponent(FB.projectId) +
+    "/databases/(default)/documents/" + encodeURIComponent(FB.collection || "results") +
+    "?documentId=" + encodeURIComponent(docId(p.email)) + "&key=" + encodeURIComponent(FB.apiKey);
+  try {
+    const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(toFields(p)) });
+    if (res.ok) {
+      try { localStorage.removeItem(key); } catch (e) {}
+      if (visible) setSave("Your result has been recorded.");
+      return;
+    }
+    if (res.status === 409) {   // this email already has a recorded result
+      try { localStorage.removeItem(key); } catch (e) {}
+      if (visible) setSave("A result for this email was already recorded earlier, so this attempt was not counted.", true);
+      return;
+    }
+    if (res.status === 400 || res.status === 403) {   // setup problem, retrying will not help
+      if (visible) setSave("Your score is shown above, but it could not be recorded. Please take a screenshot and send it to the organiser.", true);
+      return;
+    }
+    throw new Error("HTTP " + res.status);
+  } catch (e) {
+    if (n < 5) {
+      if (visible) setSave("Saving your result... (retrying)");
+      setTimeout(() => postResult(p, key, n + 1, visible), 3000 * (n + 1));
+    } else if (visible) {
+      setSave("Could not reach the server yet. Your result is stored on this device and will be sent automatically when you reopen this page with a working connection.", true);
+    }
+  }
+}
+function saveResult(a) {
+  if (!fbOn()) return;
+  const percent = Math.round((a.score / a.total) * 100);
+  const details = a.items.map((it, i) => (i + 1) + ". " + it.q + " -> " + (it.chosen || "(no answer)") + (it.ok ? " [correct]" : " [wrong]")).join("\n");
+  const payload = { exam: CONFIG.title, name: a.name, email: a.email, score: a.score, total: a.total, percent,
+    result: percent >= CONFIG.passMark ? "Pass" : "Fail", auto: a.auto ? "Yes" : "No", submittedAt: new Date(a.at).toISOString(), details };
+  const key = "exam_pending_" + a.email;
+  try { localStorage.setItem(key, JSON.stringify(payload)); } catch (e) {}
+  setSave("Saving your result...");
+  postResult(payload, key, 0, true);
+}
+// Re-send any result that did not reach the database (e.g. connection dropped)
+(function retryPending() {
+  if (!fbOn()) return;
+  try {
+    const keys = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.indexOf("exam_pending_") === 0) keys.push(k);
+    }
+    keys.forEach(k => postResult(JSON.parse(localStorage.getItem(k)), k, 0, false));
+  } catch (e) {}
+})();
+
+// Resume an exam in progress after a crash or refresh
+(function resume() {
+  let p = null;
+  try { p = JSON.parse(localStorage.getItem(PROGRESS_KEY) || "null"); } catch (e) {}
+  if (!p || p.v !== EXAM_ID || !p.paper || !p.student) return;
+  try { if (localStorage.getItem(KEY(p.student.email))) { localStorage.removeItem(PROGRESS_KEY); return; } } catch (e) {}
+  student = p.student; paper = p.paper; endTime = p.endTime;
+  render();
+  Object.keys(p.answers || {}).forEach(i => {
+    const r = document.querySelector('input[name="q' + i + '"][value="' + p.answers[i] + '"]');
+    if (r) r.checked = true;
+  });
+  show("exam,submitBox,timer");
+  tick();
+  if (!submitted) timerId = setInterval(tick, 1000);
+})();
+
+function showAttempt(a) {
+  const percent = Math.round((a.score / a.total) * 100);
+  const passed = percent >= CONFIG.passMark;
+  const review = $("review"); review.innerHTML = "";
+  show("result");
+  $("resultName").textContent = a.name;
+  $("scoreText").textContent = a.score + " / " + a.total + " (" + percent + "%) - " + (passed ? "Pass" : "Fail");
+  const prefix = a.auto ? "Time ran out, so your exam was submitted automatically. " : "";
+  if (!isRevealed()) {
+    $("resultNote").textContent = prefix + "Your answers are saved. Correct answers will be revealed on " + fmt(REVEAL) +
+      ". Come back to this page after that time, tap \"Already submitted? View my results\", and enter your email (use the same browser).";
+    return;
+  }
+  $("resultNote").textContent = prefix + "Your answers are reviewed below.";
+  a.items.forEach((it, i) => {
+    const card = document.createElement("div"); card.className = "card rev " + (it.ok ? "right" : "wrong");
+    const q = document.createElement("div"); q.className = "q"; q.textContent = (i + 1) + ". " + it.q;
+    const tag = document.createElement("div"); tag.className = "line";
+    const t = document.createElement("span"); t.className = "tag " + (it.ok ? "right" : "wrong");
+    t.textContent = it.ok ? "Correct" : (it.chosen ? "Wrong" : "Not answered"); tag.appendChild(t);
+    const y = document.createElement("div"); y.className = "line"; y.textContent = "Your answer: " + (it.chosen || "(no answer)");
+    card.appendChild(q); card.appendChild(tag); card.appendChild(y);
+    if (!it.ok) { const c = document.createElement("div"); c.className = "line"; c.textContent = "Correct answer: " + it.right; card.appendChild(c); }
+    review.appendChild(card);
+  });
+}
+
+$("lookupBtn").addEventListener("click", () => { show("lookup"); $("lookupErr").classList.add("hidden"); });
+$("lookupBack").addEventListener("click", home);
+$("resultBack").addEventListener("click", home);
+$("lookupGo").addEventListener("click", () => {
+  const email = $("lookupEmail").value.trim().toLowerCase();
+  const err = $("lookupErr"); err.classList.add("hidden");
+  let raw = null;
+  try { raw = localStorage.getItem(KEY(email)); } catch (e) {}
+  if (!raw) return showErr(err, "No saved result found for this email in this browser.");
+  showAttempt(JSON.parse(raw));
+});
+
+$("keyBtn").addEventListener("click", () => {
+  if (!isRevealed()) return;
+  const review = $("review"); review.innerHTML = "";
+  show("result");
+  $("resultName").textContent = "Answer key";
+  $("scoreText").textContent = "";
+  $("resultNote").textContent = "Correct answers for all questions.";
+  QUESTIONS.forEach((it, i) => {
+    const card = document.createElement("div"); card.className = "card rev right";
+    const q = document.createElement("div"); q.className = "q"; q.textContent = (i + 1) + ". " + it.q;
+    const c = document.createElement("div"); c.className = "line"; c.textContent = "Correct answer: " + it.options[it.answer];
+    card.appendChild(q); card.appendChild(c); review.appendChild(card);
+  });
+});
+</script>
+</body>
+</html>

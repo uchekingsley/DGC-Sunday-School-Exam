@@ -1,0 +1,27 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Exam results:
+    // - Anyone can submit their exam score (validated schema).
+    // - Direct read access enabled (so you can view/export results directly without any login/password).
+    // - Nobody can edit or delete submitted records.
+    match /results/{id} {
+      allow create: if request.resource.data.keys().hasOnly(['exam','name','email','score','total','percent','result','auto','submittedAt','details'])
+        && request.resource.data.keys().hasAll(['exam','name','email','score','total','percent','result','auto','submittedAt','details'])
+        && request.resource.data.name is string && request.resource.data.name.size() <= 120
+        && request.resource.data.email is string && request.resource.data.email.size() <= 200
+        && request.resource.data.score is int && request.resource.data.total is int
+        && request.resource.data.score >= 0 && request.resource.data.score <= request.resource.data.total
+        && request.resource.data.details is string && request.resource.data.details.size() <= 20000;
+      
+      // Zero password read access for your exporter
+      allow read: if true;
+      allow update, delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
