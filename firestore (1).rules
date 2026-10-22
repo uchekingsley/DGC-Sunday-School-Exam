@@ -13,7 +13,7 @@ service cloud.firestore {
         && request.resource.data.email is string && request.resource.data.email.size() <= 200
         && request.resource.data.score is int && request.resource.data.total is int
         && request.resource.data.score >= 0 && request.resource.data.score <= request.resource.data.total
-        && request.resource.data.details is string && request.resource.data.details.size() <= 20000;
+        && request.resource.data.details is string && request.resource.data.details.size() <= 100000;
       
       // Zero password read access for your exporter
       allow read: if true;
