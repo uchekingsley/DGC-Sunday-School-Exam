@@ -260,7 +260,7 @@ const START = T(CONFIG.startAt), END = T(CONFIG.endAt), REVEAL = T(CONFIG.reveal
 const notOpen   = () => START !== null && Date.now() < START;
 const isClosed  = () => END !== null && Date.now() >= END;
 const isRevealed = () => REVEAL === null || Date.now() >= REVEAL;
-const fmt = ms => new Date(ms).toLocaleString("en-NG", { dateStyle: "full", timeStyle: "short" });
+const fmt = ms => new Date(ms).toLocaleString("en-US", { dateStyle: "full", timeStyle: "short" });
 const KEY = e => "exam_attempt_" + e;
 
 // Anti-cheat: track window unfocus / tab switches
