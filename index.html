@@ -106,7 +106,6 @@ const CONFIG = {
   title: "Sunday School Test",
   intro: "70 questions, 40 minutes. The exam closes today at 8:00 PM.",
   timeLimitMinutes: 40,
-  passMark: 50,
   questionsPerStudent: 70,
 
   // Nigeria time is +01:00. Format: YYYY-MM-DDTHH:MM:SS+01:00
@@ -469,7 +468,7 @@ function saveResult(a) {
   });
   
   const payload = { exam: CONFIG.title, name: a.name, email: a.email, score: a.score, total: a.total, percent,
-    result: percent >= CONFIG.passMark ? "Pass" : "Fail", auto: a.auto ? "Yes" : "No", submittedAt: new Date(a.at).toISOString(), details };
+    result: "Submitted", auto: a.auto ? "Yes" : "No", submittedAt: new Date(a.at).toISOString(), details };
   const key = "exam_pending_" + a.email;
   try { localStorage.setItem(key, JSON.stringify(payload)); } catch (e) {}
   setSave("Saving your result...");
@@ -512,11 +511,10 @@ function saveResult(a) {
 
 function showAttempt(a) {
   const percent = Math.round((a.score / a.total) * 100);
-  const passed = percent >= CONFIG.passMark;
   const review = $("review"); review.innerHTML = "";
   show("result");
   $("resultName").textContent = a.name;
-  $("scoreText").textContent = a.score + " / " + a.total + " (" + percent + "%) - " + (passed ? "Pass" : "Fail");
+  $("scoreText").textContent = a.score + " / " + a.total + " (" + percent + "%)";
   const prefix = a.auto ? "Time ran out, so your exam was submitted automatically. " : "";
 
   // WHILE EXAM IS ACTIVE: Show score immediately, but withhold answers

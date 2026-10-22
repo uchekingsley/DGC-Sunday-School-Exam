@@ -250,16 +250,16 @@
       <div class="stat-value" id="statTotal">0</div>
     </div>
     <div class="stat-card">
-      <div class="stat-label">Pass Rate</div>
-      <div class="stat-value" id="statPassRate">0%</div>
-    </div>
-    <div class="stat-card">
       <div class="stat-label">Average Score</div>
       <div class="stat-value" id="statAvg">0 / 70</div>
     </div>
     <div class="stat-card">
       <div class="stat-label">Highest Score</div>
       <div class="stat-value" id="statHigh">0 / 70</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Lowest Score</div>
+      <div class="stat-value" id="statLow">0 / 70</div>
     </div>
   </div>
 
@@ -268,10 +268,10 @@
     <input type="text" id="searchInput" class="search-box" placeholder="🔍 Search candidate by name or email...">
     
     <div class="filter-group">
-      <select id="filterResult">
-        <option value="ALL">All Results</option>
-        <option value="Pass">Pass Only</option>
-        <option value="Fail">Fail Only</option>
+      <select id="filterAuto">
+        <option value="ALL">All Submissions</option>
+        <option value="No">Manual Submits</option>
+        <option value="Yes">Timed Out (Auto)</option>
       </select>
 
       <select id="sortOrder">
@@ -295,7 +295,6 @@
             <th>Email</th>
             <th>Score</th>
             <th>Percent</th>
-            <th>Status</th>
             <th>Submitted At</th>
             <th>Auto?</th>
             <th>Answers</th>
@@ -415,15 +414,15 @@ function getTimestampMs(val) {
 
 function applyFiltersAndRender() {
   const query = $("searchInput").value.trim().toLowerCase();
-  const resultFilter = $("filterResult").value;
+  const autoFilter = $("filterAuto").value;
   const sort = $("sortOrder").value;
 
   filteredRecords = rawRecords.filter(r => {
     const matchesSearch = !query || 
       (r.name && r.name.toLowerCase().includes(query)) ||
       (r.email && r.email.toLowerCase().includes(query));
-    const matchesResult = (resultFilter === "ALL") || (r.result === resultFilter);
-    return matchesSearch && matchesResult;
+    const matchesAuto = (autoFilter === "ALL") || (r.auto === autoFilter);
+    return matchesSearch && matchesAuto;
   });
 
   filteredRecords.sort((a, b) => {
@@ -444,31 +443,30 @@ function updateStats() {
   $("statTotal").textContent = total;
 
   if (total === 0) {
-    $("statPassRate").textContent = "0%";
     $("statAvg").textContent = "0 / 70";
     $("statHigh").textContent = "0 / 70";
+    $("statLow").textContent = "0 / 70";
     return;
   }
 
-  let passCount = 0;
   let totalScore = 0;
-  let maxScore = 0;
+  let maxScore = -1;
+  let minScore = 999999;
   let examTotal = 70;
 
   rawRecords.forEach(r => {
-    if (r.result === "Pass") passCount++;
     const s = Number(r.score) || 0;
     totalScore += s;
     if (s > maxScore) maxScore = s;
+    if (s < minScore) minScore = s;
     if (r.total) examTotal = r.total;
   });
 
-  const passRate = Math.round((passCount / total) * 100);
   const avg = (totalScore / total).toFixed(1);
 
-  $("statPassRate").textContent = `${passRate}%`;
   $("statAvg").textContent = `${avg} / ${examTotal}`;
-  $("statHigh").textContent = `${maxScore} / ${examTotal}`;
+  $("statHigh").textContent = `${maxScore >= 0 ? maxScore : 0} / ${examTotal}`;
+  $("statLow").textContent = `${minScore <= examTotal ? minScore : 0} / ${examTotal}`;
 }
 
 const PAGE_SIZE = 50;
@@ -507,8 +505,6 @@ function renderTable() {
   let html = "";
   pageItems.forEach((r, idx) => {
     const globalRank = startIdx + idx + 1;
-    const isPass = r.result === "Pass";
-    const statusBadge = `<span class="badge ${isPass ? 'pass' : 'fail'}">${r.result || 'N/A'}</span>`;
     const autoBadge = r.auto === "Yes" ? `<span class="badge auto">Time Out</span>` : `<span>No</span>`;
     const timeStr = formatTimeOnly(r.submittedAt);
 
@@ -518,8 +514,7 @@ function renderTable() {
         <td><strong>${escapeHtml(r.name || "Unknown")}</strong></td>
         <td>${escapeHtml(r.email || "")}</td>
         <td><strong>${r.score}</strong> / ${r.total}</td>
-        <td>${r.percent}%</td>
-        <td>${statusBadge}</td>
+        <td><strong>${r.percent}%</strong></td>
         <td>${timeStr}</td>
         <td>${autoBadge}</td>
         <td>
@@ -549,7 +544,7 @@ $("lastPageBtn").addEventListener("click", () => {
 
 // Filters reset pagination to Page 1
 $("searchInput").addEventListener("input", () => { currentPage = 1; applyFiltersAndRender(); });
-$("filterResult").addEventListener("change", () => { currentPage = 1; applyFiltersAndRender(); });
+$("filterAuto").addEventListener("change", () => { currentPage = 1; applyFiltersAndRender(); });
 $("sortOrder").addEventListener("change", () => { currentPage = 1; applyFiltersAndRender(); });
 
 window.viewDetails = function(globalIdx) {
@@ -593,7 +588,6 @@ $("exportCsvBtn").addEventListener("click", () => {
     "Score",
     "Total Questions",
     "Percentage (%)",
-    "Result (Pass/Fail)",
     "Time Expired Auto-Submit",
     "Submitted At"
   ];
@@ -610,7 +604,6 @@ $("exportCsvBtn").addEventListener("click", () => {
       r.score ?? "",
       r.total ?? "",
       r.percent ?? "",
-      r.result || "",
       r.auto || "No",
       formatDateTime(r.submittedAt)
     ];
