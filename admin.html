@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Discipleship Exam Results & Exporter</title>
+<title>Sunday School Exam Results & Exporter</title>
 <!-- Firebase App and Firestore SDKs (Compat CDN) -->
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
@@ -231,7 +231,7 @@
     <div style="display: flex; align-items: center; gap: 14px;">
       <img src="https://davidicgenerationchurch.com/wp-content/uploads/2023/05/DGC-all-white-logo@3x-300x149.png" alt="DGC Logo" style="max-height: 48px; max-width: 160px; object-fit: contain;" onerror="this.src='logo_white.png'">
       <div>
-        <h1>Discipleship Exam - Results & Exporter</h1>
+        <h1>Sunday School Exam - Results & Exporter</h1>
         <p class="subtitle" id="statusText">Ready</p>
       </div>
     </div>
@@ -255,11 +255,11 @@
     </div>
     <div class="stat-card">
       <div class="stat-label">Average Score</div>
-      <div class="stat-value" id="statAvg">0 / 30</div>
+      <div class="stat-value" id="statAvg">0 / 70</div>
     </div>
     <div class="stat-card">
       <div class="stat-label">Highest Score</div>
-      <div class="stat-value" id="statHigh">0 / 30</div>
+      <div class="stat-value" id="statHigh">0 / 70</div>
     </div>
   </div>
 
@@ -453,7 +453,7 @@ function updateStats() {
   let passCount = 0;
   let totalScore = 0;
   let maxScore = 0;
-  let examTotal = 30;
+  let examTotal = 70;
 
   rawRecords.forEach(r => {
     if (r.result === "Pass") passCount++;
