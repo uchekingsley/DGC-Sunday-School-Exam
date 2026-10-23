@@ -104,7 +104,7 @@
    ============================================================ */
 const CONFIG = {
   title: "Sunday School Test",
-  intro: "70 questions, 40 minutes. The exam closes on Sunday, October 25 at 9:10 AM.",
+  intro: "70 questions, 40 minutes. The exam closes today at 9:10 AM.",
   timeLimitMinutes: 40,
   questionsPerStudent: 70,
 
@@ -260,6 +260,13 @@ const notOpen   = () => START !== null && Date.now() < START;
 const isClosed  = () => END !== null && Date.now() >= END;
 const isRevealed = () => REVEAL === null || Date.now() >= REVEAL;
 const fmt = ms => new Date(ms).toLocaleString("en-US", { dateStyle: "full", timeStyle: "short" });
+const fmtClose = ms => {
+  if (!ms) return "";
+  const d = new Date(ms), now = new Date();
+  const isToday = d.toDateString() === now.toDateString();
+  const timeStr = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
+  return isToday ? ("today at " + timeStr) : ("on " + fmt(ms));
+};
 const KEY = e => "exam_attempt_" + e;
 
 // Anti-cheat: track window unfocus / tab switches
@@ -279,7 +286,7 @@ function showErr(el, text) { el.textContent = text; el.classList.remove("hidden"
 
 function refreshStart() {
   $("examTitle").textContent = CONFIG.title;
-  $("examIntro").textContent = CONFIG.intro;
+  $("examIntro").textContent = "70 questions, 40 minutes. The exam closes " + fmtClose(END) + ".";
   document.title = CONFIG.title;
 
   const wait = notOpen();
@@ -309,7 +316,7 @@ function refreshStart() {
   $("registerBox").classList.remove("hidden");
   $("waitMsg").classList.add("hidden");
   $("closedMsg").classList.add("hidden");
-  $("revealInfo").textContent = "Correct answers and question review will be unlocked after the exam closes on " + fmt(END) + ". You will see your score immediately after you submit.";
+  $("revealInfo").textContent = "Correct answers and question review will be unlocked after the exam closes " + fmtClose(END) + ". You will see your score immediately after you submit.";
 }
 function home() { show("start"); refreshStart(); }
 home();
@@ -519,7 +526,7 @@ function showAttempt(a) {
 
   // WHILE EXAM IS ACTIVE: Show score immediately, but withhold answers
   if (!isRevealed()) {
-    $("resultNote").textContent = prefix + "Your exam has been submitted safely and your score is recorded! Detailed question review and correct answers will unlock once the exam officially ends on " + fmt(REVEAL) + ". Please return to this page after that time to view what you got right and wrong.";
+    $("resultNote").textContent = prefix + "Your exam has been submitted safely and your score is recorded! Detailed question review and correct answers will unlock once the exam officially ends " + fmtClose(REVEAL) + ". Please return to this page after that time to view what you got right and wrong.";
     return;
   }
 
